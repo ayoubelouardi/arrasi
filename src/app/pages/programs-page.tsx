@@ -41,6 +41,8 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
   const [moveName, setMoveName] = useState('')
   const [moveEditName, setMoveEditName] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
+  const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
+  const [draggingMoveId, setDraggingMoveId] = useState<string | null>(null)
 
   const selectedProgram = useMemo(
     () => programs.find((program) => program.id === selectedProgramId) ?? null,
@@ -224,6 +226,16 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
     }
   }
 
+  async function handleReorderLevel(levelId: string, targetOrder: number) {
+    try {
+      await service.updateLevel(levelId, { order: targetOrder })
+      await loadLevels(selectedProgramId)
+      onNotify({ message: 'Level order updated', tone: 'success' })
+    } catch (error) {
+      onNotify({ message: `Level reorder failed: ${messageFromError(error)}`, tone: 'error' })
+    }
+  }
+
   async function handleCreateMove(event: Event) {
     event.preventDefault()
     if (!selectedLevel) {
@@ -271,6 +283,16 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
       onNotify({ message: 'Move deleted', tone: 'success' })
     } catch (error) {
       onNotify({ message: `Move delete failed: ${messageFromError(error)}`, tone: 'error' })
+    }
+  }
+
+  async function handleReorderMove(moveId: string, targetOrder: number) {
+    try {
+      await service.updateMove(moveId, { order: targetOrder })
+      await loadMoves(selectedLevelId)
+      onNotify({ message: 'Move order updated', tone: 'success' })
+    } catch (error) {
+      onNotify({ message: `Move reorder failed: ${messageFromError(error)}`, tone: 'error' })
     }
   }
 
@@ -393,15 +415,28 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
               </form>
 
               <div class="space-y-2">
+                <p class="text-xs text-zinc-500">Drag levels to reorder, or use Up/Down.</p>
                 {!levels.length ? <p class="text-sm text-zinc-400">No levels yet.</p> : null}
                 {levels.map((level) => (
                   <div
                     key={level.id}
+                    draggable
                     class={`rounded-lg border px-3 py-2 ${
                       selectedLevelId === level.id
                         ? 'border-emerald-500/40 bg-emerald-500/10'
                         : 'border-zinc-800 bg-zinc-950/40'
                     }`}
+                    onDragStart={() => setDraggingLevelId(level.id)}
+                    onDragEnd={() => setDraggingLevelId(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (!draggingLevelId || draggingLevelId === level.id) {
+                        return
+                      }
+
+                      handleReorderLevel(draggingLevelId, level.order).catch(() => undefined)
+                      setDraggingLevelId(null)
+                    }}
                   >
                     <button
                       type="button"
@@ -413,7 +448,23 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
                     >
                       {level.order}. {level.name}
                     </button>
-                    <div class="mt-2 flex gap-2">
+                    <div class="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                        disabled={level.order === 1}
+                        onClick={() => handleReorderLevel(level.id, level.order - 1)}
+                      >
+                        Up
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                        disabled={level.order === levels.length}
+                        onClick={() => handleReorderLevel(level.id, level.order + 1)}
+                      >
+                        Down
+                      </button>
                       <button
                         type="button"
                         class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
@@ -482,9 +533,25 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
               </form>
 
               <div class="space-y-2">
+                <p class="text-xs text-zinc-500">Drag moves to reorder, or use Up/Down.</p>
                 {!moves.length ? <p class="text-sm text-zinc-400">No moves yet.</p> : null}
                 {moves.map((move) => (
-                  <div key={move.id} class="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+                  <div
+                    key={move.id}
+                    draggable
+                    class="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2"
+                    onDragStart={() => setDraggingMoveId(move.id)}
+                    onDragEnd={() => setDraggingMoveId(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (!draggingMoveId || draggingMoveId === move.id) {
+                        return
+                      }
+
+                      handleReorderMove(draggingMoveId, move.order).catch(() => undefined)
+                      setDraggingMoveId(null)
+                    }}
+                  >
                     <div class="text-sm font-medium text-zinc-200">
                       {move.order}. {move.name}
                     </div>
@@ -498,7 +565,23 @@ export function ProgramsPage({ service, onNotify }: ProgramsPageProps) {
                           onInput={(event) => setMoveEditName((event.currentTarget as HTMLInputElement).value)}
                         />
                       </FormField>
-                      <div class="flex gap-2">
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                          disabled={move.order === 1}
+                          onClick={() => handleReorderMove(move.id, move.order - 1)}
+                        >
+                          Up
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                          disabled={move.order === moves.length}
+                          onClick={() => handleReorderMove(move.id, move.order + 1)}
+                        >
+                          Down
+                        </button>
                         <button
                           type="button"
                           class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800"

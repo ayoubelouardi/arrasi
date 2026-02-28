@@ -93,6 +93,9 @@ describe('ProgramAuthoringService', () => {
     const move3 = await service.duplicateMove(move1.id)
 
     expect(move3.order).toBe(2)
+    await service.updateMove(move3.id, { order: 1 })
+    const reorderedMoves = await service.listMoves(levelA.id)
+    expect(reorderedMoves.map((move) => move.order)).toEqual([1, 2, 3])
     await service.deleteMove(move2.id)
 
     const moves = await service.listMoves(levelA.id)
