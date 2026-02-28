@@ -5,7 +5,8 @@ import { ProgramsPage } from './app/pages/programs-page'
 import { SettingsPage } from './app/pages/settings-page'
 import { TodayPage } from './app/pages/today-page'
 import { TrainingTrackerDB } from './storage/db'
-import { ProgramAuthoringService } from './services'
+import type { ImportMode } from './shared/types'
+import { ExportImportService, ProgramAuthoringService } from './services'
 
 type TabId = 'programs' | 'today' | 'history' | 'settings'
 
@@ -21,13 +22,50 @@ export function App() {
   const [isStartModalOpen, setIsStartModalOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
 
-  const { db, programService } = useMemo(() => {
+  const { db, programService, exportImportService } = useMemo(() => {
     const database = new TrainingTrackerDB()
     return {
       db: database,
       programService: new ProgramAuthoringService(database),
+      exportImportService: new ExportImportService(database),
     }
   }, [])
+
+  async function handleExportAll() {
+    try {
+      const payload = await exportImportService.exportAll()
+      const json = JSON.stringify(payload, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `arrasi-backup-${new Date().toISOString().slice(0, 10)}.json`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setToast({ message: 'Backup exported', tone: 'success' })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Export failed: ${error.message}` : 'Export failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleImportFile(file: File, mode: ImportMode) {
+    try {
+      const json = await file.text()
+      const summary = await exportImportService.importJson(json, mode)
+      setToast({
+        message: `Import complete: ${summary.programs} programs, ${summary.levels} levels, ${summary.moves} moves`,
+        tone: 'success',
+      })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Import failed: ${error.message}` : 'Import failed',
+        tone: 'error',
+      })
+    }
+  }
 
   useEffect(() => {
     if (!toast) {
@@ -62,11 +100,17 @@ export function App() {
       case 'history':
         return <HistoryPage />
       case 'settings':
-        return <SettingsPage onSaveSettings={() => setToast({ message: 'Settings saved locally', tone: 'success' })} />
+        return (
+          <SettingsPage
+            onSaveSettings={() => setToast({ message: 'Settings saved locally', tone: 'success' })}
+            onExportAll={handleExportAll}
+            onImportFile={handleImportFile}
+          />
+        )
       default:
         return null
     }
-  }, [activeTab, programService])
+  }, [activeTab, programService, exportImportService])
 
   return (
     <div class="min-h-screen bg-zinc-950 text-zinc-100">
