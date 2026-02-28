@@ -4,6 +4,6 @@ import { App } from '../app'
 describe('App', () => {
   it('renders the app title', () => {
     render(<App />)
-    expect(screen.getByText('الراسي · A-Rrasi')).toBeDefined()
+    expect(screen.getAllByText('الراسي · A-Rrasi').length).toBeGreaterThan(0)
   })
 })

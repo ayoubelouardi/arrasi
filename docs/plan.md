@@ -32,6 +32,7 @@ P1-T1 (Repo/tooling baseline)
 ## Phase 1 — Foundation and Architecture
 
 **Phase goal:** establish a production-ready base architecture and developer workflow.
+**Progress snapshot:** P1-T1 ✅, P1-T2 ✅, P1-T3 ✅. **Next:** P1-T4 (IndexedDB persistence foundation).
 
 ### Task P1-T1: Repository and quality baseline
 - **Goal:** set up project structure, build tooling, linting, formatting, and CI checks.
