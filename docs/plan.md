@@ -32,7 +32,7 @@ P1-T1 (Repo/tooling baseline)
 ## Phase 1 — Foundation and Architecture
 
 **Phase goal:** establish a production-ready base architecture and developer workflow.
-**Progress snapshot:** P1-T1 ✅, P1-T2 ✅, P1-T3 ✅. **Next:** P1-T4 (IndexedDB persistence foundation).
+**Progress snapshot:** P1-T1 ✅, P1-T2 ✅, P1-T3 ✅, P1-T4 ✅. **Next:** Phase 2 Task P2-T1 (domain services).
 
 ### Task P1-T1: Repository and quality baseline
 - **Goal:** set up project structure, build tooling, linting, formatting, and CI checks.
@@ -73,6 +73,7 @@ P1-T1 (Repo/tooling baseline)
 ## Phase 2 — Program Authoring (Core CRUD)
 
 **Phase goal:** deliver complete authoring workflows for programs, levels, and moves.
+**Progress snapshot:** P2-T1 ✅. **Next:** P2-T2 (CRUD UI flows).
 
 ### Task P2-T1: Domain services for Program/Level/Move
 - **Goal:** implement business logic services independent from UI.
