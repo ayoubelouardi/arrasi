@@ -73,7 +73,7 @@ P1-T1 (Repo/tooling baseline)
 ## Phase 2 — Program Authoring (Core CRUD)
 
 **Phase goal:** deliver complete authoring workflows for programs, levels, and moves.
-**Progress snapshot:** P2-T1 ✅. **Next:** P2-T2 (CRUD UI flows).
+**Progress snapshot:** P2-T1 ✅, P2-T2 ✅. **Next:** P2-T3 (reordering and structure management).
 
 ### Task P2-T1: Domain services for Program/Level/Move
 - **Goal:** implement business logic services independent from UI.

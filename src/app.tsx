@@ -4,6 +4,8 @@ import { HistoryPage } from './app/pages/history-page'
 import { ProgramsPage } from './app/pages/programs-page'
 import { SettingsPage } from './app/pages/settings-page'
 import { TodayPage } from './app/pages/today-page'
+import { TrainingTrackerDB } from './storage/db'
+import { ProgramAuthoringService } from './services'
 
 type TabId = 'programs' | 'today' | 'history' | 'settings'
 
@@ -17,36 +19,54 @@ const TABS: { id: TabId; label: string }[] = [
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('programs')
   const [isStartModalOpen, setIsStartModalOpen] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
+
+  const { db, programService } = useMemo(() => {
+    const database = new TrainingTrackerDB()
+    return {
+      db: database,
+      programService: new ProgramAuthoringService(database),
+    }
+  }, [])
 
   useEffect(() => {
-    if (!toastMessage) {
+    if (!toast) {
       return
     }
 
     const timeoutId = window.setTimeout(() => {
-      setToastMessage(null)
+      setToast(null)
     }, 2500)
 
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [toastMessage])
+  }, [toast])
+
+  useEffect(() => {
+    db.open().catch(() => {
+      setToast({ message: 'Failed to initialize local database', tone: 'error' })
+    })
+
+    return () => {
+      db.close()
+    }
+  }, [db])
 
   const page = useMemo(() => {
     switch (activeTab) {
       case 'programs':
-        return <ProgramsPage />
+        return <ProgramsPage service={programService} onNotify={setToast} />
       case 'today':
         return <TodayPage onStartWorkout={() => setIsStartModalOpen(true)} />
       case 'history':
         return <HistoryPage />
       case 'settings':
-        return <SettingsPage onSaveSettings={() => setToastMessage('Settings saved locally')} />
+        return <SettingsPage onSaveSettings={() => setToast({ message: 'Settings saved locally', tone: 'success' })} />
       default:
         return null
     }
-  }, [activeTab])
+  }, [activeTab, programService])
 
   return (
     <div class="min-h-screen bg-zinc-950 text-zinc-100">
@@ -119,7 +139,7 @@ export function App() {
               class="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
               onClick={() => {
                 setIsStartModalOpen(false)
-                setToastMessage('Workout session started')
+                setToast({ message: 'Workout session started', tone: 'success' })
               }}
             >
               Start
@@ -132,7 +152,7 @@ export function App() {
         </p>
       </Modal>
 
-      {toastMessage ? <Toast message={toastMessage} tone="success" onClose={() => setToastMessage(null)} /> : null}
+      {toast ? <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} /> : null}
     </div>
   )
 }
