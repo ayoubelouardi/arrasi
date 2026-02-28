@@ -13,6 +13,7 @@
 1. [Introduction](#1-introduction)  
    1.1 Purpose  
    1.2 Scope  
+   1.2.1 Out of Scope (v1)  
    1.3 Definitions and Acronyms  
 2. [Overall Description](#2-overall-description)  
    2.1 Product Perspective  
@@ -30,12 +31,15 @@
       3.1.6 Export and Import  
       3.1.7 Synchronization with Supabase (Optional)  
       3.1.8 User Interface  
+      3.1.9 Data Validation and Integrity  
    3.2 Non‑Functional Requirements  
       3.2.1 Performance  
       3.2.2 Privacy and Security  
       3.2.3 Usability  
       3.2.4 Maintainability and Extensibility  
       3.2.5 Compatibility  
+      3.2.6 Accessibility  
+      3.2.7 Reliability and Data Safety  
 4. [External Interface Requirements](#4-external-interface-requirements)  
    4.1 User Interfaces  
    4.2 Hardware Interfaces  
@@ -48,6 +52,7 @@
 6. [Appendices](#6-appendices)  
    6.1 Glossary  
    6.2 Future Considerations  
+   6.3 Release Acceptance Criteria  
 
 ---
 
@@ -67,6 +72,12 @@ The application will provide:
 - A clean, mobile‑first user interface with dark mode as the default theme.  
 
 The application is intended to be open‑sourced, allowing developers to self‑host, customise, and contribute.
+
+### 1.2.1 Out of Scope (v1)  
+- Built‑in social/community features (leaderboards, comments, public profiles).  
+- Native mobile apps (iOS/Android); web app only in v1.  
+- Wearable integrations and automatic health data ingestion.  
+- Multi‑tenant account management inside the app (optional Supabase auth remains external to core app flow).  
 
 ### 1.3 Definitions and Acronyms  
 
@@ -112,6 +123,8 @@ The system interacts with two storage backends:
 - Users who enable sync will provide their own Supabase URL and anonymous key (or use a public demo instance).  
 - The app does not include authentication; if sync is used, the Supabase instance must handle access control (e.g., Row Level Security). For simplicity, the first version may assume a single user per Supabase project.  
 - The browser’s storage limits (typically >50MB) are sufficient for the expected data volume (thousands of logs).  
+- Dates/times are stored in ISO 8601 UTC; UI may display in local timezone.  
+- Units (kg/lb, km/mi) are user preferences; persisted logs keep the originally entered value and unit.
 
 ---
 
@@ -240,17 +253,18 @@ Each entity must include a comprehensive set of attributes, allowing users to ca
   - Export **a single program** (including its levels, moves, and optionally its logs) as a JSON file.  
 - **Import:**  
   - Import a previously exported JSON file.  
-  - On import, the user can choose to merge (add new records, skip duplicates based on ID or name) or replace existing data.  
+  - On import, the user can choose to merge (ID‑based upsert using `updatedAt`; newer record wins) or replace existing data.  
+  - Name‑based duplicate detection is advisory only and must not overwrite records without explicit user confirmation.  
   - Validate the JSON structure and show errors if malformed.  
 - **JSON Format:** Must be human‑readable, well‑indented, and easy to parse manually. (See Section 5.3 for schema.)
 
 #### 3.1.7 Synchronization with Supabase (Optional)  
 - **Enable Sync:** User provides Supabase URL and anon key. The app tests the connection.  
-- **Initial Sync:** If local data exists, user is prompted to either upload local data to Supabase or download remote data (merge conflict resolution strategy: last‑write‑wins, or prompt).  
+- **Initial Sync:** If local data exists, user is prompted to either upload local data to Supabase or download remote data; merge uses last‑write‑wins based on `updatedAt`.  
 - **Subsequent Sync:**  
   - Automatic sync on data changes (debounced) or manual sync button.  
   - Offline queue: when offline, changes are stored locally and synced when connection is restored.  
-- **Conflict Handling:** Simple timestamp‑based resolution (latest wins). More advanced strategies may be added later.  
+- **Conflict Handling:** Timestamp‑based resolution (`updatedAt`, latest wins). If timestamps are equal, keep remote value and log a conflict record locally for user review.  
 - **Seamless Transition:** User can switch from local to sync at any time; data is migrated. Switching off sync leaves local copy intact (user can choose to keep or discard remote data).  
 
 #### 3.1.8 User Interface  
@@ -259,6 +273,14 @@ Each entity must include a comprehensive set of attributes, allowing users to ca
 - **Components:** Inspired by shadcn/ui – clean, minimal, with cards, modals, and simple forms.  
 - **Navigation:** Bottom bar (mobile) / side drawer (desktop) with tabs: Programs, Today, History, Settings.  
 - **Drag‑and‑drop:** For reordering levels and moves (with fallback buttons).  
+
+#### 3.1.9 Data Validation and Integrity  
+- IDs for all entities are generated client‑side as UUIDv4 values to avoid collisions during offline usage and later sync.  
+- Required field validation (e.g., program name, level name, move name) must run before persistence and show actionable inline errors.  
+- `order` values for levels and moves must remain positive, contiguous, and unique within their parent container after reorder, duplicate, import, or delete operations.  
+- Delete behavior in local mode is hard delete; in sync mode deletions are represented as tombstones (`deletedAt`) until remote sync is confirmed.  
+- Import uses an all‑or‑nothing transaction per file: if referential integrity fails after ID resolution, no partial writes are committed.  
+- Orphan records (e.g., move without level, level without program) must not be persisted.
 
 ### 3.2 Non‑Functional Requirements  
 
@@ -288,6 +310,18 @@ Each entity must include a comprehensive set of attributes, allowing users to ca
 #### 3.2.5 Compatibility  
 - Supports latest two versions of Chrome, Firefox, Safari, and Edge.  
 - Graceful degradation: older browsers may not support IndexedDB; show error message.  
+
+#### 3.2.6 Accessibility  
+- Conform to WCAG 2.1 AA for key flows (program creation, workout logging, export/import, settings).  
+- All interactive controls must be keyboard accessible with visible focus states.  
+- Text/background contrast ratio must meet at least 4.5:1 for normal text.  
+- Form inputs must have labels and clear error messaging consumable by screen readers.
+
+#### 3.2.7 Reliability and Data Safety  
+- Writes to IndexedDB must be atomic per user action to prevent partial entity creation.  
+- Autosave behavior: draft form state is preserved across accidental refresh/navigation during editing and workout logging.  
+- Failed sync attempts are retried with exponential backoff and surfaced in UI state (last error + retry action).  
+- Import and replace actions require explicit confirmation and provide a pre‑operation backup option.
 
 ---
 
@@ -324,6 +358,8 @@ Version: 1
 - `moves`: `id` as keyPath. Indexes: `levelId`, `order`.  
 - `logs`: `id` as keyPath. Indexes: `programId`, `levelId`, `moveId`, `date`.  
 - `settings`: singleton store with fixed key `settings`.  
+- `sync_queue` (optional when sync enabled): queued mutations for offline replay.  
+- `conflicts` (optional when sync enabled): unresolved sync conflicts for user review/logging.  
 
 Relations are maintained via foreign keys (programId, levelId) but not enforced by IndexedDB.  
 
@@ -331,28 +367,31 @@ Relations are maintained via foreign keys (programId, levelId) but not enforced 
 Tables mirror the IndexedDB structure, with additional columns for syncing metadata.  
 
 **Table: programs**  
-- Columns: id (uuid primary key), name, description, goal, duration, difficulty, tags (jsonb), created_at, updated_at, color, custom_fields (jsonb).  
+- Columns: id (uuid primary key), owner_id (uuid), name, description, goal, duration, difficulty, tags (jsonb), created_at, updated_at, deleted_at, color, custom_fields (jsonb).  
 
 **Table: levels**  
-- Columns: id (uuid), program_id (uuid references programs), name, description, order, duration, rest_days, notes, created_at, updated_at, custom_fields.  
+- Columns: id (uuid), owner_id (uuid), program_id (uuid references programs), name, description, order, duration, rest_days, notes, created_at, updated_at, deleted_at, custom_fields.  
 
 **Table: moves**  
-- Columns: id (uuid), level_id (uuid references levels), name, description, type, target_sets, target_reps, target_weight, target_time, rest_between_sets, video_url, image_url, equipment (jsonb), notes, order, created_at, updated_at, custom_fields.  
+- Columns: id (uuid), owner_id (uuid), level_id (uuid references levels), name, description, type, target_sets, target_reps, target_weight, target_time, rest_between_sets, video_url, image_url, equipment (jsonb), notes, order, created_at, updated_at, deleted_at, custom_fields.  
 
 **Table: logs**  
-- Columns: id (uuid), program_id, level_id, move_id, date, actual_sets, actual_reps, actual_weight, perceived_effort, notes, completed, created_at.  
+- Columns: id (uuid), owner_id (uuid), program_id, level_id, move_id, date, actual_sets, actual_reps, actual_weight, perceived_effort, notes, completed, created_at, updated_at, deleted_at.  
 
 **Table: user_settings**  
-- Columns: id (uuid primary key default 'settings'), dark_mode (bool), ... (other preferences).  
+- Columns: owner_id (uuid primary key), sync_enabled (bool), dark_mode (bool), unit_preference, updated_at, ... (other preferences).  
 
-Row Level Security (RLS) should be enabled; each user (authenticated via Supabase Auth) sees only their own data. For simplicity, the first version may assume a single‑user database with no authentication, but the schema is ready for RLS.
+Row Level Security (RLS) should be enabled; each user (authenticated via Supabase Auth) sees only rows with their `owner_id = auth.uid()`.  
+For single‑user/no‑auth deployments, the same schema can be used with a fixed configured `owner_id` value.
 
 ### 5.3 Export/Import JSON Format  
-The exported JSON is an object with a top‑level `version` field and collections.  
+The exported JSON is an object with top‑level `version`, `schemaVersion`, `exportMode`, and collections.  
 
 ```json
 {
   "version": "1.0",
+  "schemaVersion": "1.0.0",
+  "exportMode": "full",
   "exportDate": "2026-02-28T12:00:00Z",
   "data": {
     "programs": [ /* array of program objects */ ],
@@ -367,6 +406,8 @@ The exported JSON is an object with a top‑level `version` field and collection
 When exporting a single program, only related levels, moves, and optionally logs are included.  
 
 Import must validate that all referenced IDs exist or resolve them (e.g., create missing programs).  
+Import must enforce compatible major schema versions (e.g., `1.x` into `1.y`); incompatible major versions are rejected with a migration hint.  
+Exports must include `schemaVersion` and `exportMode` (`full` or `program`) metadata fields for deterministic import behavior.
 
 ---
 
@@ -381,6 +422,13 @@ Import must validate that all referenced IDs exist or resolve them (e.g., create
 - **Social Sharing:** Generate shareable links (if hosted on a public instance).  
 - **Advanced Analytics:** Volume charts, personal records.  
 - **Wearable Integration:** Import heart rate, etc.  
+
+### 6.3 Release Acceptance Criteria  
+- CRUD, reorder, duplicate, and cascade delete behavior works for programs/levels/moves without creating orphan records.  
+- Workout logging supports start/resume/complete flows and updates progress indicators correctly.  
+- Export and import (merge + replace) pass validation rules and preserve referential integrity.  
+- Local‑only mode functions fully offline, and sync mode correctly replays queued offline writes after reconnect.  
+- Security/privacy checks pass: no analytics calls, no unexpected outbound network requests beyond configured Supabase endpoint.
 
 ---
 
