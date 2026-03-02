@@ -82,6 +82,7 @@ export interface UserSettings {
   syncEnabled: boolean
   supabaseUrl?: string
   supabaseAnonKey?: string
+  syncOwnerId?: string
   lastSync?: ISODateString
   darkMode: boolean
   unitPreference?: 'metric' | 'imperial'

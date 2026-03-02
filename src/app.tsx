@@ -6,7 +6,8 @@ import { SettingsPage } from './app/pages/settings-page'
 import { TodayPage } from './app/pages/today-page'
 import { TrainingTrackerDB } from './storage/db'
 import type { ImportMode } from './shared/types'
-import { ExportImportService, HistoryAnalyticsService, ProgramAuthoringService, WorkoutSessionService } from './services'
+import { ExportImportService, HistoryAnalyticsService, ProgramAuthoringService, SupabaseSyncService, WorkoutSessionService } from './services'
+import type { SyncConfigInput } from './services/supabase-sync-service'
 
 type TabId = 'programs' | 'today' | 'history' | 'settings'
 
@@ -21,16 +22,18 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('programs')
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
 
-  const { db, programService, exportImportService, workoutSessionService, historyAnalyticsService } = useMemo(() => {
-    const database = new TrainingTrackerDB()
-    return {
-      db: database,
-      programService: new ProgramAuthoringService(database),
-      exportImportService: new ExportImportService(database),
-      workoutSessionService: new WorkoutSessionService(database),
-      historyAnalyticsService: new HistoryAnalyticsService(database),
-    }
-  }, [])
+  const { db, programService, exportImportService, workoutSessionService, historyAnalyticsService, supabaseSyncService } =
+    useMemo(() => {
+      const database = new TrainingTrackerDB()
+      return {
+        db: database,
+        programService: new ProgramAuthoringService(database),
+        exportImportService: new ExportImportService(database),
+        workoutSessionService: new WorkoutSessionService(database),
+        historyAnalyticsService: new HistoryAnalyticsService(database),
+        supabaseSyncService: new SupabaseSyncService(database, new ExportImportService(database)),
+      }
+    }, [])
 
   async function handleExportAll() {
     try {
@@ -63,6 +66,60 @@ export function App() {
     } catch (error) {
       setToast({
         message: error instanceof Error ? `Import failed: ${error.message}` : 'Import failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleSaveSyncConfig(config: SyncConfigInput) {
+    try {
+      await supabaseSyncService.saveConfig(config)
+      setToast({ message: 'Sync configuration saved', tone: 'success' })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Sync config failed: ${error.message}` : 'Sync config failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleTestSyncConnection(config: SyncConfigInput) {
+    try {
+      await supabaseSyncService.testConnection(config)
+      setToast({ message: 'Supabase connection successful', tone: 'success' })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Connection test failed: ${error.message}` : 'Connection test failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleInitialUpload(config: SyncConfigInput) {
+    try {
+      const summary = await supabaseSyncService.initialUpload(config)
+      setToast({
+        message: `Upload complete: ${summary.programs} programs, ${summary.levels} levels, ${summary.moves} moves`,
+        tone: 'success',
+      })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Initial upload failed: ${error.message}` : 'Initial upload failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleInitialDownload(config: SyncConfigInput, mode: ImportMode) {
+    try {
+      const summary = await supabaseSyncService.initialDownload(config, mode)
+      setToast({
+        message: `Download complete: ${summary.programs} programs, ${summary.levels} levels, ${summary.moves} moves`,
+        tone: 'success',
+      })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Initial download failed: ${error.message}` : 'Initial download failed',
         tone: 'error',
       })
     }
@@ -106,12 +163,16 @@ export function App() {
             onSaveSettings={() => setToast({ message: 'Settings saved locally', tone: 'success' })}
             onExportAll={handleExportAll}
             onImportFile={handleImportFile}
+            onSaveSyncConfig={handleSaveSyncConfig}
+            onTestSyncConnection={handleTestSyncConnection}
+            onInitialUpload={handleInitialUpload}
+            onInitialDownload={handleInitialDownload}
           />
         )
       default:
         return null
     }
-  }, [activeTab, programService, exportImportService, workoutSessionService, historyAnalyticsService])
+  }, [activeTab, programService, exportImportService, workoutSessionService, historyAnalyticsService, supabaseSyncService])
 
   function handleTabKeyDown(index: number, key: string) {
     if (key === 'ArrowRight' || key === 'ArrowDown') {
