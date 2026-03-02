@@ -155,7 +155,7 @@ P1-T1 (Repo/tooling baseline)
 ## Phase 4 — Sync, Hardening, and Release
 
 **Phase goal:** add optional Supabase sync and complete production hardening.
-**Progress snapshot:** P4-T1 ✅, P4-T2 ✅, P4-T3 ✅. **Next:** P4-T4 (Release readiness and acceptance).
+**Progress snapshot:** P4-T1 ✅, P4-T2 ✅, P4-T3 ✅, P4-T4 ✅. **Next:** Phase complete.
 
 ### Task P4-T1: Supabase sync foundation
 - **Goal:** establish optional remote sync with owner-scoped records.

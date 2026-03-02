@@ -5,6 +5,10 @@
 This is a personal Training Program, and Tracker. self-hosted and privacy
 focused.
 
+## Release and deployment
+
+See `docs/release.md` for acceptance gates, deployment steps, rollback guidance, and release candidate tagging.
+
 #### The Legend of the Village Stone
 
 Long before modern iron and steel reached the deep interior of Najd, the men of
@@ -35,5 +39,4 @@ When a young man finally learned this lesson—calming his mind, anchoring his
 stance, and channeling a quiet, unbreakable power from the ground up—the stone
 would rise. In that moment of absolute, unwavering stillness under immense
 weight, he embodied the spirit of the eternal mountains.
-
 
