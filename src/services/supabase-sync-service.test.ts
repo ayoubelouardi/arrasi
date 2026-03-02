@@ -42,6 +42,14 @@ describe('SupabaseSyncService', () => {
       }),
     ).toThrow('anon key is required')
 
+    expect(() =>
+      service.validateConfig({
+        url: 'http://example.supabase.co',
+        anonKey: 'key',
+        ownerId: 'owner',
+      }),
+    ).toThrow('must use https')
+
     db.close()
     await db.delete()
   })
@@ -257,6 +265,66 @@ describe('SupabaseSyncService', () => {
     expect(queued[0].attempts).toBe(1)
     expect(queued[0].nextRetryAt).toBeDefined()
     expect(queued[0].lastError).toContain('Supabase request failed')
+
+    db.close()
+    await db.delete()
+  })
+
+  it('retries failed replay and succeeds after recovery', async () => {
+    let postAttempts = 0
+    const fetchMock = async (_input: string, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'GET') {
+        return okResponse([])
+      }
+      postAttempts += 1
+      if (postAttempts === 1) {
+        return {
+          ok: false,
+          status: 503,
+          async json() {
+            return { message: 'Service unavailable' }
+          },
+          async text() {
+            return 'Service unavailable'
+          },
+        }
+      }
+      return okResponse([])
+    }
+
+    const db = new TrainingTrackerDB(dbName())
+    const syncService = new SupabaseSyncService(db, new ExportImportService(db), fetchMock)
+    await db.open()
+
+    await syncService.enqueueMutation({
+      entity: 'programs',
+      entityId: 'p1',
+      operation: 'update',
+      payload: {
+        id: 'p1',
+        owner_id: 'owner-1',
+        name: 'Queued Program',
+        updated_at: new Date().toISOString(),
+      },
+    })
+
+    const firstReplay = await syncService.replayQueue({
+      url: 'https://example.supabase.co',
+      anonKey: 'anon-key',
+      ownerId: 'owner-1',
+    })
+    const queuedAfterFailure = await db.syncQueue.toArray()
+    await db.syncQueue.update(queuedAfterFailure[0].id, { nextRetryAt: new Date(0).toISOString() })
+
+    const secondReplay = await syncService.replayQueue({
+      url: 'https://example.supabase.co',
+      anonKey: 'anon-key',
+      ownerId: 'owner-1',
+    })
+
+    expect(firstReplay.failed).toBe(1)
+    expect(secondReplay.succeeded).toBe(1)
+    expect(await db.syncQueue.count()).toBe(0)
 
     db.close()
     await db.delete()

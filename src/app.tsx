@@ -37,15 +37,7 @@ export function App() {
 
   async function handleExportAll() {
     try {
-      const payload = await exportImportService.exportAll()
-      const json = JSON.stringify(payload, null, 2)
-      const blob = new Blob([json], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `arrasi-backup-${new Date().toISOString().slice(0, 10)}.json`
-      anchor.click()
-      URL.revokeObjectURL(url)
+      await createAndDownloadBackup('arrasi-backup')
       setToast({ message: 'Backup exported', tone: 'success' })
     } catch (error) {
       setToast({
@@ -57,6 +49,15 @@ export function App() {
 
   async function handleImportFile(file: File, mode: ImportMode) {
     try {
+      if (mode === 'replace') {
+        const confirmed = window.confirm(
+          'Replace mode will overwrite local data. A backup will be created first. Continue?',
+        )
+        if (!confirmed) {
+          return
+        }
+        await createAndDownloadBackup('arrasi-pre-replace-backup')
+      }
       const json = await file.text()
       const summary = await exportImportService.importJson(json, mode)
       setToast({
@@ -112,6 +113,15 @@ export function App() {
 
   async function handleInitialDownload(config: SyncConfigInput, mode: ImportMode) {
     try {
+      if (mode === 'replace') {
+        const confirmed = window.confirm(
+          'Initial download in replace mode will overwrite local data. A backup will be created first. Continue?',
+        )
+        if (!confirmed) {
+          return
+        }
+        await createAndDownloadBackup('arrasi-pre-sync-download-backup')
+      }
       const summary = await supabaseSyncService.initialDownload(config, mode)
       setToast({
         message: `Download complete: ${summary.programs} programs, ${summary.levels} levels, ${summary.moves} moves`,
@@ -138,6 +148,18 @@ export function App() {
         tone: 'error',
       })
     }
+  }
+
+  async function createAndDownloadBackup(prefix: string) {
+    const payload = await exportImportService.exportAll()
+    const json = JSON.stringify(payload, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${prefix}-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {

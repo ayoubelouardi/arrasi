@@ -111,7 +111,7 @@ export function SettingsPage({
         <FormField
           id="importFile"
           label="Import JSON backup"
-          hint="Imports are transactional: invalid payloads fail without partial writes."
+          hint="Imports are transactional; replace mode asks for confirmation and backup."
         >
           <input
             id="importFile"

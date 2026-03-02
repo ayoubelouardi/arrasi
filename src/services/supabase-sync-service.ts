@@ -70,13 +70,25 @@ export class SupabaseSyncService {
   ) {}
 
   validateConfig(config: SyncConfigInput): SyncConfig {
-    const url = ensureSlashless(config.url.trim())
+    const rawUrl = config.url.trim()
+    const parsed = (() => {
+      try {
+        return new URL(rawUrl)
+      } catch {
+        return null
+      }
+    })()
     const anonKey = config.anonKey.trim()
     const ownerId = config.ownerId.trim()
 
-    if (!url || !/^https?:\/\/.+/i.test(url)) {
+    if (!parsed) {
       throw new Error('Invalid Supabase URL. Use an absolute http/https URL.')
     }
+    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
+    if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLocalhost)) {
+      throw new Error('Supabase URL must use https (http is only allowed for localhost).')
+    }
+    const url = ensureSlashless(`${parsed.origin}${parsed.pathname}`)
     if (!anonKey) {
       throw new Error('Supabase anon key is required.')
     }
