@@ -1,3 +1,4 @@
 export { ProgramAuthoringService, createProgramAuthoringService } from './program-authoring-service'
 export { ExportImportService, createExportImportService } from './export-import-service'
 export { WorkoutSessionService, createWorkoutSessionService } from './workout-session-service'
+export { HistoryAnalyticsService, createHistoryAnalyticsService } from './history-analytics-service'

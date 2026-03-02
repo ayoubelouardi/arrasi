@@ -6,7 +6,7 @@ import { SettingsPage } from './app/pages/settings-page'
 import { TodayPage } from './app/pages/today-page'
 import { TrainingTrackerDB } from './storage/db'
 import type { ImportMode } from './shared/types'
-import { ExportImportService, ProgramAuthoringService, WorkoutSessionService } from './services'
+import { ExportImportService, HistoryAnalyticsService, ProgramAuthoringService, WorkoutSessionService } from './services'
 
 type TabId = 'programs' | 'today' | 'history' | 'settings'
 
@@ -21,13 +21,14 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('programs')
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
 
-  const { db, programService, exportImportService, workoutSessionService } = useMemo(() => {
+  const { db, programService, exportImportService, workoutSessionService, historyAnalyticsService } = useMemo(() => {
     const database = new TrainingTrackerDB()
     return {
       db: database,
       programService: new ProgramAuthoringService(database),
       exportImportService: new ExportImportService(database),
       workoutSessionService: new WorkoutSessionService(database),
+      historyAnalyticsService: new HistoryAnalyticsService(database),
     }
   }, [])
 
@@ -98,7 +99,7 @@ export function App() {
       case 'today':
         return <TodayPage service={workoutSessionService} onNotify={setToast} />
       case 'history':
-        return <HistoryPage />
+        return <HistoryPage service={historyAnalyticsService} onNotify={setToast} />
       case 'settings':
         return (
           <SettingsPage
@@ -110,7 +111,7 @@ export function App() {
       default:
         return null
     }
-  }, [activeTab, programService, exportImportService, workoutSessionService])
+  }, [activeTab, programService, exportImportService, workoutSessionService, historyAnalyticsService])
 
   return (
     <div class="min-h-screen bg-zinc-950 text-zinc-100">
