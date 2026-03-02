@@ -107,9 +107,9 @@ export function HistoryPage({ service, onNotify }: HistoryPageProps) {
       </div>
 
       <Card title="Weekly activity">
-        <div class="space-y-2">
+        <div class="space-y-2" role="list" aria-label="Weekly activity summary">
           {(metrics?.weeklyActivity ?? []).map((item) => (
-            <div key={item.label} class="flex items-center gap-2">
+            <div key={item.label} class="flex items-center gap-2" role="listitem" aria-label={`${item.label}: ${item.count} workouts`}>
               <span class="w-14 text-xs text-zinc-400">{item.label}</span>
               <div class="h-2 flex-1 overflow-hidden rounded bg-zinc-800">
                 <div

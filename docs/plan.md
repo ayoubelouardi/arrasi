@@ -114,7 +114,7 @@ P1-T1 (Repo/tooling baseline)
 ## Phase 3 — Workout Execution and Progress
 
 **Phase goal:** deliver daily workout execution, logging, and progress visibility.
-**Progress snapshot:** P3-T1 ✅, P3-T2 ✅, P3-T3 ✅. **Next:** P3-T4 (Accessibility and performance pass).
+**Progress snapshot:** P3-T1 ✅, P3-T2 ✅, P3-T3 ✅, P3-T4 ✅. **Next:** P4-T1 (Supabase sync foundation).
 
 ### Task P3-T1: Today screen and session lifecycle
 - **Goal:** implement start/resume/complete flow for workout sessions.

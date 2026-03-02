@@ -113,23 +113,49 @@ export function App() {
     }
   }, [activeTab, programService, exportImportService, workoutSessionService, historyAnalyticsService])
 
+  function handleTabKeyDown(index: number, key: string) {
+    if (key === 'ArrowRight' || key === 'ArrowDown') {
+      setActiveTab(TABS[(index + 1) % TABS.length].id)
+      return true
+    }
+    if (key === 'ArrowLeft' || key === 'ArrowUp') {
+      setActiveTab(TABS[(index - 1 + TABS.length) % TABS.length].id)
+      return true
+    }
+    if (key === 'Home') {
+      setActiveTab(TABS[0].id)
+      return true
+    }
+    if (key === 'End') {
+      setActiveTab(TABS[TABS.length - 1].id)
+      return true
+    }
+    return false
+  }
+
   return (
     <div class="min-h-screen bg-zinc-950 text-zinc-100">
       <div class="mx-auto flex min-h-screen max-w-6xl">
         <aside class="hidden w-64 flex-col border-r border-zinc-800/80 p-4 md:flex">
           <h1 class="text-title-lg font-semibold text-emerald-400">الراسي · A-Rrasi</h1>
           <p class="mt-1 text-sm text-zinc-400">Personal Training Program & Tracker</p>
-          <nav class="mt-6 flex flex-col gap-2">
-            {TABS.map((tab) => (
+          <nav class="mt-6 flex flex-col gap-2" aria-label="Primary">
+            {TABS.map((tab, index) => (
               <button
                 key={tab.id}
                 type="button"
+                aria-current={activeTab === tab.id ? 'page' : undefined}
                 class={`rounded-xl px-3 py-2 text-left text-sm transition ${
                   activeTab === tab.id
                     ? 'bg-emerald-500/15 text-emerald-300'
                     : 'text-zinc-300 hover:bg-zinc-800/70'
                 }`}
                 onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => {
+                  if (handleTabKeyDown(index, event.key)) {
+                    event.preventDefault()
+                  }
+                }}
               >
                 {tab.label}
               </button>
@@ -146,18 +172,24 @@ export function App() {
         </main>
       </div>
 
-      <nav class="fixed inset-x-0 bottom-0 border-t border-zinc-800 bg-zinc-950/95 p-2 backdrop-blur md:hidden">
+      <nav class="fixed inset-x-0 bottom-0 border-t border-zinc-800 bg-zinc-950/95 p-2 backdrop-blur md:hidden" aria-label="Primary">
         <ul class="mx-auto grid max-w-xl grid-cols-4 gap-2">
-          {TABS.map((tab) => (
+          {TABS.map((tab, index) => (
             <li key={tab.id}>
               <button
                 type="button"
+                aria-current={activeTab === tab.id ? 'page' : undefined}
                 class={`w-full rounded-lg px-2 py-2 text-xs transition ${
                   activeTab === tab.id
                     ? 'bg-emerald-500/15 text-emerald-300'
                     : 'text-zinc-300 hover:bg-zinc-800/70'
                 }`}
                 onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => {
+                  if (handleTabKeyDown(index, event.key)) {
+                    event.preventDefault()
+                  }
+                }}
               >
                 {tab.label}
               </button>

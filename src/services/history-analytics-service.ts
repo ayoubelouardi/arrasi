@@ -42,20 +42,38 @@ export class HistoryAnalyticsService {
   }
 
   async getHistoryData(filters: HistoryFilters = {}): Promise<HistoryData> {
-    const [logs, programs, levels, moves] = await Promise.all([
-      this.db.logs.toArray(),
-      this.db.programs.toArray(),
-      this.db.levels.toArray(),
-      this.db.moves.toArray(),
+    const sourceLogs = filters.programId
+      ? await this.db.logs.where('programId').equals(filters.programId).toArray()
+      : await this.db.logs.toArray()
+    const filteredLogs = sourceLogs.filter((log) => this.matchesFilters(log, filters)).sort((a, b) => b.date.localeCompare(a.date))
+    const programIds = new Set(filteredLogs.map((log) => log.programId))
+    const levelIds = new Set(filteredLogs.map((log) => log.levelId))
+    const moveIds = new Set(filteredLogs.map((log) => log.moveId).filter((id): id is string => Boolean(id)))
+
+    const [programs, levels, moves] = await Promise.all([
+      programIds.size ? this.db.programs.bulkGet([...programIds]) : Promise.resolve([]),
+      levelIds.size ? this.db.levels.bulkGet([...levelIds]) : Promise.resolve([]),
+      moveIds.size ? this.db.moves.bulkGet([...moveIds]) : Promise.resolve([]),
     ])
 
-    const programMap = new Map(programs.map((program) => [program.id, program]))
-    const levelMap = new Map(levels.map((level) => [level.id, level]))
-    const moveMap = new Map(moves.map((move) => [move.id, move]))
-
-    const filteredLogs = logs
-      .filter((log) => this.matchesFilters(log, filters))
-      .sort((a, b) => b.date.localeCompare(a.date))
+    const programMap = new Map<string, Program>()
+    for (const program of programs) {
+      if (program) {
+        programMap.set(program.id, program)
+      }
+    }
+    const levelMap = new Map<string, { id: string; name: string }>()
+    for (const level of levels) {
+      if (level) {
+        levelMap.set(level.id, level)
+      }
+    }
+    const moveMap = new Map<string, { id: string; name: string }>()
+    for (const move of moves) {
+      if (move) {
+        moveMap.set(move.id, move)
+      }
+    }
 
     const entries: HistoryEntry[] = filteredLogs.map((log) => ({
       id: log.id,
