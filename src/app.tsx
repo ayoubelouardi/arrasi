@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { Modal, Toast } from './app/components'
+import { Toast } from './app/components'
 import { HistoryPage } from './app/pages/history-page'
 import { ProgramsPage } from './app/pages/programs-page'
 import { SettingsPage } from './app/pages/settings-page'
 import { TodayPage } from './app/pages/today-page'
 import { TrainingTrackerDB } from './storage/db'
 import type { ImportMode } from './shared/types'
-import { ExportImportService, ProgramAuthoringService } from './services'
+import { ExportImportService, ProgramAuthoringService, WorkoutSessionService } from './services'
 
 type TabId = 'programs' | 'today' | 'history' | 'settings'
 
@@ -19,15 +19,15 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('programs')
-  const [isStartModalOpen, setIsStartModalOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'info' | 'error' } | null>(null)
 
-  const { db, programService, exportImportService } = useMemo(() => {
+  const { db, programService, exportImportService, workoutSessionService } = useMemo(() => {
     const database = new TrainingTrackerDB()
     return {
       db: database,
       programService: new ProgramAuthoringService(database),
       exportImportService: new ExportImportService(database),
+      workoutSessionService: new WorkoutSessionService(database),
     }
   }, [])
 
@@ -96,7 +96,7 @@ export function App() {
       case 'programs':
         return <ProgramsPage service={programService} onNotify={setToast} />
       case 'today':
-        return <TodayPage onStartWorkout={() => setIsStartModalOpen(true)} />
+        return <TodayPage service={workoutSessionService} onNotify={setToast} />
       case 'history':
         return <HistoryPage />
       case 'settings':
@@ -110,7 +110,7 @@ export function App() {
       default:
         return null
     }
-  }, [activeTab, programService, exportImportService])
+  }, [activeTab, programService, exportImportService, workoutSessionService])
 
   return (
     <div class="min-h-screen bg-zinc-950 text-zinc-100">
@@ -164,37 +164,6 @@ export function App() {
           ))}
         </ul>
       </nav>
-
-      <Modal
-        open={isStartModalOpen}
-        title="Start workout session?"
-        onClose={() => setIsStartModalOpen(false)}
-        footer={
-          <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              class="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
-              onClick={() => setIsStartModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
-              onClick={() => {
-                setIsStartModalOpen(false)
-                setToast({ message: 'Workout session started', tone: 'success' })
-              }}
-            >
-              Start
-            </button>
-          </div>
-        }
-      >
-        <p class="text-sm text-zinc-300">
-          This is the Phase 1 scaffold flow. Session lifecycle behavior is implemented in Phase 3.
-        </p>
-      </Modal>
 
       {toast ? <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} /> : null}
     </div>

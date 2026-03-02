@@ -5,6 +5,8 @@ export type ProgramDifficulty = 'Beginner' | 'Intermediate' | 'Advanced'
 export type MoveType = 'Strength' | 'Cardio' | 'Mobility' | 'Stretching' | 'Other'
 export type ExportMode = 'full' | 'program'
 export type ImportMode = 'merge' | 'replace'
+export type WeightUnit = 'kg' | 'lb'
+export type DistanceUnit = 'km' | 'mi'
 
 export interface BaseEntity {
   id: EntityId
@@ -56,13 +58,23 @@ export interface WorkoutLog extends BaseEntity {
   programId: EntityId
   levelId: EntityId
   moveId?: EntityId
+  sessionId?: EntityId
+  logMode?: 'level' | 'move'
   date: ISODateString
   actualSets?: number
   actualReps?: string
   actualWeight?: string
+  actualWeightValue?: number
+  actualWeightUnit?: WeightUnit
+  normalizedWeightKg?: number
+  actualDistance?: string
+  actualDistanceValue?: number
+  actualDistanceUnit?: DistanceUnit
+  normalizedDistanceKm?: number
   perceivedEffort?: number
   notes: string
   completed: boolean
+  metadata?: Record<string, unknown>
 }
 
 export interface UserSettings {
