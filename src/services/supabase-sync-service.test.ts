@@ -171,4 +171,136 @@ describe('SupabaseSyncService', () => {
     db.close()
     await db.delete()
   })
+
+  it('replays queued mutations when connectivity is restored', async () => {
+    const calls: string[] = []
+    const fetchMock = async (input: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${input}`)
+      if ((init?.method ?? 'GET') === 'GET') {
+        return okResponse([])
+      }
+      return okResponse([])
+    }
+
+    const db = new TrainingTrackerDB(dbName())
+    const syncService = new SupabaseSyncService(db, new ExportImportService(db), fetchMock)
+    await db.open()
+
+    await syncService.enqueueMutation({
+      entity: 'programs',
+      entityId: 'p1',
+      operation: 'update',
+      payload: {
+        id: 'p1',
+        owner_id: 'owner-1',
+        name: 'Queued Program',
+        updated_at: new Date().toISOString(),
+      },
+    })
+
+    const summary = await syncService.replayQueue({
+      url: 'https://example.supabase.co',
+      anonKey: 'anon-key',
+      ownerId: 'owner-1',
+    })
+
+    expect(summary.succeeded).toBe(1)
+    expect(await db.syncQueue.count()).toBe(0)
+    expect(calls.some((call) => call.startsWith('POST'))).toBe(true)
+
+    db.close()
+    await db.delete()
+  })
+
+  it('applies retry backoff when replay fails', async () => {
+    const fetchMock = async (_input: string, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'GET') {
+        return okResponse([])
+      }
+      return {
+        ok: false,
+        status: 503,
+        async json() {
+          return { message: 'Service unavailable' }
+        },
+        async text() {
+          return 'Service unavailable'
+        },
+      }
+    }
+
+    const db = new TrainingTrackerDB(dbName())
+    const syncService = new SupabaseSyncService(db, new ExportImportService(db), fetchMock)
+    await db.open()
+
+    await syncService.enqueueMutation({
+      entity: 'programs',
+      entityId: 'p1',
+      operation: 'update',
+      payload: {
+        id: 'p1',
+        owner_id: 'owner-1',
+        name: 'Queued Program',
+        updated_at: new Date().toISOString(),
+      },
+    })
+
+    const summary = await syncService.replayQueue({
+      url: 'https://example.supabase.co',
+      anonKey: 'anon-key',
+      ownerId: 'owner-1',
+    })
+    const queued = await db.syncQueue.toArray()
+
+    expect(summary.failed).toBe(1)
+    expect(queued).toHaveLength(1)
+    expect(queued[0].attempts).toBe(1)
+    expect(queued[0].nextRetryAt).toBeDefined()
+    expect(queued[0].lastError).toContain('Supabase request failed')
+
+    db.close()
+    await db.delete()
+  })
+
+  it('logs deterministic conflict when timestamps are equal', async () => {
+    const timestamp = new Date().toISOString()
+    const calls: string[] = []
+    const fetchMock = async (input: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${input}`)
+      if ((init?.method ?? 'GET') === 'GET') {
+        return okResponse([{ id: 'p1', updated_at: timestamp }])
+      }
+      return okResponse([])
+    }
+
+    const db = new TrainingTrackerDB(dbName())
+    const syncService = new SupabaseSyncService(db, new ExportImportService(db), fetchMock)
+    await db.open()
+
+    await syncService.enqueueMutation({
+      entity: 'programs',
+      entityId: 'p1',
+      operation: 'update',
+      payload: {
+        id: 'p1',
+        owner_id: 'owner-1',
+        name: 'Queued Program',
+        updated_at: timestamp,
+      },
+    })
+
+    const summary = await syncService.replayQueue({
+      url: 'https://example.supabase.co',
+      anonKey: 'anon-key',
+      ownerId: 'owner-1',
+    })
+
+    expect(summary.conflicts).toBe(1)
+    expect(await db.syncQueue.count()).toBe(0)
+    expect(await db.conflicts.count()).toBe(1)
+    expect(calls.some((call) => call.startsWith('POST'))).toBe(false)
+
+    db.close()
+    await db.delete()
+  })
 })

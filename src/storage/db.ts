@@ -10,6 +10,10 @@ export interface SyncQueueItem {
   entityId: string
   operation: 'create' | 'update' | 'delete'
   payload?: Record<string, unknown>
+  attempts?: number
+  nextRetryAt?: string
+  lastError?: string
+  updatedAt?: string
   createdAt: string
 }
 
@@ -19,6 +23,9 @@ export interface SyncConflict {
   entityId: string
   localUpdatedAt: string
   remoteUpdatedAt: string
+  reason?: string
+  localPayload?: Record<string, unknown>
+  remotePayload?: Record<string, unknown>
   createdAt: string
 }
 

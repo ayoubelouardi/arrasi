@@ -10,6 +10,25 @@ export interface SyncConfigInput {
 
 export type SyncConfig = SyncConfigInput
 
+export type SyncEntity = 'programs' | 'levels' | 'moves' | 'logs' | 'user_settings'
+
+export interface QueueMutationInput {
+  entity: SyncEntity
+  entityId: string
+  operation: 'create' | 'update' | 'delete'
+  payload?: Record<string, unknown>
+}
+
+interface QueueReplaySummary {
+  processed: number
+  succeeded: number
+  conflicts: number
+  failed: number
+}
+
+const RETRY_BASE_MS = 5_000
+const RETRY_MAX_MS = 5 * 60_000
+
 interface SupabaseResponse<T> {
   ok: boolean
   status: number
@@ -32,6 +51,15 @@ function parseJsonErrorText(text: string) {
     return 'Unknown response error'
   }
   return text.length > 200 ? `${text.slice(0, 200)}...` : text
+}
+
+function updatedAtFromPayload(payload?: Record<string, unknown>) {
+  const value = payload?.updatedAt ?? payload?.updated_at
+  return typeof value === 'string' ? value : undefined
+}
+
+function retryDelayMs(attempts: number) {
+  return Math.min(RETRY_BASE_MS * 2 ** Math.max(0, attempts), RETRY_MAX_MS)
 }
 
 export class SupabaseSyncService {
@@ -171,6 +199,61 @@ export class SupabaseSyncService {
     }
   }
 
+  async enqueueMutation(input: QueueMutationInput) {
+    const timestamp = nowIso()
+    const item = {
+      id: crypto.randomUUID(),
+      entity: input.entity,
+      entityId: input.entityId,
+      operation: input.operation,
+      payload: input.payload,
+      attempts: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+    await this.db.syncQueue.put(item)
+    return item
+  }
+
+  async replayQueue(config: SyncConfigInput): Promise<QueueReplaySummary> {
+    const validated = this.validateConfig(config)
+    const queue = await this.db.syncQueue.orderBy('createdAt').toArray()
+    let processed = 0
+    let succeeded = 0
+    let conflicts = 0
+    let failed = 0
+
+    for (const item of queue) {
+      if (item.nextRetryAt && item.nextRetryAt > nowIso()) {
+        continue
+      }
+
+      processed += 1
+      try {
+        const conflict = await this.applyQueuedMutation(validated, item)
+        if (conflict) {
+          conflicts += 1
+        } else {
+          succeeded += 1
+        }
+      } catch (error) {
+        failed += 1
+        const attempts = (item.attempts ?? 0) + 1
+        const delay = retryDelayMs(attempts - 1)
+        await this.db.syncQueue.put({
+          ...item,
+          attempts,
+          lastError: error instanceof Error ? error.message : 'Unknown queue replay error',
+          nextRetryAt: new Date(Date.now() + delay).toISOString(),
+          updatedAt: nowIso(),
+        })
+      }
+    }
+
+    await this.saveConfig(validated)
+    return { processed, succeeded, conflicts, failed }
+  }
+
   private fallbackSettings(config: SyncConfig): UserSettings {
     return {
       id: 'settings',
@@ -236,6 +319,133 @@ export class SupabaseSyncService {
     }
 
     return response.json()
+  }
+
+  private async applyQueuedMutation(config: SyncConfig, item: {
+    id: string
+    entity: string
+    entityId: string
+    operation: 'create' | 'update' | 'delete'
+    payload?: Record<string, unknown>
+  }) {
+    const entity = item.entity as SyncEntity
+    const remote = await this.fetchRemoteById(entity, item.entityId, config)
+    const localUpdatedAt = updatedAtFromPayload(item.payload) ?? nowIso()
+    const remoteUpdatedAt = this.remoteUpdatedAt(remote)
+
+    if (remoteUpdatedAt && localUpdatedAt === remoteUpdatedAt) {
+      await this.db.conflicts.put({
+        id: crypto.randomUUID(),
+        entity: item.entity,
+        entityId: item.entityId,
+        localUpdatedAt,
+        remoteUpdatedAt,
+        reason: 'equal-timestamp-remote-kept',
+        localPayload: item.payload,
+        remotePayload: remote ?? undefined,
+        createdAt: nowIso(),
+      })
+      await this.db.syncQueue.delete(item.id)
+      return true
+    }
+
+    if (remoteUpdatedAt && localUpdatedAt < remoteUpdatedAt) {
+      await this.db.syncQueue.delete(item.id)
+      return false
+    }
+
+    if (item.operation === 'delete') {
+      await this.softDeleteRemote(entity, item.entityId, localUpdatedAt, config)
+    } else {
+      const row = this.buildRemotePayload(item.payload, item.entityId, config.ownerId, localUpdatedAt)
+      await this.upsert(entity, config, [row])
+    }
+
+    await this.db.syncQueue.delete(item.id)
+    return false
+  }
+
+  private async fetchRemoteById(entity: SyncEntity, entityId: string, config: SyncConfig) {
+    if (entity === 'user_settings') {
+      const rows = (await this.request('user_settings', config, {
+        method: 'GET',
+        query: {
+          select: '*',
+          owner_id: `eq.${config.ownerId}`,
+          limit: '1',
+        },
+      })) as Record<string, unknown>[]
+      return rows[0]
+    }
+
+    const rows = (await this.request(entity, config, {
+      method: 'GET',
+      query: {
+        select: '*',
+        owner_id: `eq.${config.ownerId}`,
+        id: `eq.${entityId}`,
+        limit: '1',
+      },
+    })) as Record<string, unknown>[]
+    return rows[0]
+  }
+
+  private remoteUpdatedAt(row?: Record<string, unknown>) {
+    if (!row) {
+      return undefined
+    }
+    return typeof row.updated_at === 'string' ? row.updated_at : undefined
+  }
+
+  private buildRemotePayload(
+    payload: Record<string, unknown> | undefined,
+    entityId: string,
+    ownerId: string,
+    updatedAt: string,
+  ): Record<string, unknown> {
+    if (!payload) {
+      return {
+        id: entityId,
+        owner_id: ownerId,
+        updated_at: updatedAt,
+        deleted_at: null,
+      }
+    }
+
+    if ('owner_id' in payload) {
+      return {
+        ...payload,
+        id: payload.id ?? entityId,
+        owner_id: ownerId,
+        updated_at: updatedAt,
+        deleted_at: payload.deleted_at ?? null,
+      }
+    }
+
+    return {
+      ...payload,
+      id: payload.id ?? entityId,
+      owner_id: ownerId,
+      updated_at: updatedAt,
+      deleted_at: null,
+    }
+  }
+
+  private async softDeleteRemote(entity: SyncEntity, entityId: string, updatedAt: string, config: SyncConfig) {
+    const row =
+      entity === 'user_settings'
+        ? {
+            owner_id: config.ownerId,
+            deleted_at: nowIso(),
+            updated_at: updatedAt,
+          }
+        : {
+            id: entityId,
+            owner_id: config.ownerId,
+            deleted_at: nowIso(),
+            updated_at: updatedAt,
+          }
+    await this.upsert(entity, config, [row])
   }
 
   private mapProgramToRemote(program: Program, ownerId: string) {

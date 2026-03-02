@@ -125,6 +125,21 @@ export function App() {
     }
   }
 
+  async function handleReplaySyncQueue(config: SyncConfigInput) {
+    try {
+      const summary = await supabaseSyncService.replayQueue(config)
+      setToast({
+        message: `Queue replay: ${summary.succeeded} applied, ${summary.conflicts} conflicts, ${summary.failed} failed`,
+        tone: summary.failed ? 'info' : 'success',
+      })
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? `Queue replay failed: ${error.message}` : 'Queue replay failed',
+        tone: 'error',
+      })
+    }
+  }
+
   useEffect(() => {
     if (!toast) {
       return
@@ -167,6 +182,7 @@ export function App() {
             onTestSyncConnection={handleTestSyncConnection}
             onInitialUpload={handleInitialUpload}
             onInitialDownload={handleInitialDownload}
+            onReplaySyncQueue={handleReplaySyncQueue}
           />
         )
       default:

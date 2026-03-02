@@ -11,6 +11,7 @@ interface SettingsPageProps {
   onTestSyncConnection: (config: SyncConfigInput) => Promise<void>
   onInitialUpload: (config: SyncConfigInput) => Promise<void>
   onInitialDownload: (config: SyncConfigInput, mode: ImportMode) => Promise<void>
+  onReplaySyncQueue: (config: SyncConfigInput) => Promise<void>
 }
 
 export function SettingsPage({
@@ -21,6 +22,7 @@ export function SettingsPage({
   onTestSyncConnection,
   onInitialUpload,
   onInitialDownload,
+  onReplaySyncQueue,
 }: SettingsPageProps) {
   const [importMode, setImportMode] = useState<ImportMode>('merge')
   const [syncUrl, setSyncUrl] = useState('')
@@ -192,6 +194,15 @@ export function SettingsPage({
             }}
           >
             Initial download
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+            onClick={() => {
+              void onReplaySyncQueue(currentSyncConfig())
+            }}
+          >
+            Replay queued mutations
           </button>
         </div>
       </form>
